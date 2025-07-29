@@ -1,22 +1,20 @@
 class DiceSet {
-  constructor() {
-    this.diceList = [];
-  }
-
-  addDice(dice) {
-    this.diceList.push(dice);
+  constructor(diceList) {
+    this.diceList = diceList;
   }
 
   getAllDice() {
     return this.diceList;
   }
 
-  getDiceCount() {
-    return this.diceList.length;
-  }
   getDie(index) {
     return this.diceList[index];
+  }
+
+  getDiceCount() {
+    return this.diceList.length;
   }
 }
 
 module.exports = DiceSet;
+
