@@ -17,4 +17,3 @@ class DiceSet {
 }
 
 module.exports = DiceSet;
-

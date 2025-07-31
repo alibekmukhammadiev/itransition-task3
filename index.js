@@ -1,134 +1,183 @@
 const readline = require("readline");
-const crypto = require("crypto");
 const Dice = require("./Dice");
 const DiceSet = require("./DiceSet");
+const FairRandom = require("./FairRandom");
+
+// for generating table
+const Table = require("cli-table3"); 
 
 const args = process.argv.slice(2);
 
-// Validation must provide at least 3 dice
+// Validating CLI args
 if (args.length < 3) {
   console.log("Error: You must provide at least 3 dice.");
-  console.log("Usage: node index.js 1,2,3,4,5,6 6,6,6,6,6,6 3,3,3,3,6,6 ...");
+  console.log("Usage: node index.js 2,2,4,4,9,9 1,1,6,6,8,8 3,3,5,5,7,7");
   process.exit(1);
 }
 
-// Validation of dice format
-for (let i = 0; i < args.length; i++) {
-  const faces = args[i].split(",").map(Number);
-
-  if (faces.length !== 6) {
-    console.log(`Error: Dice ${i + 1} must have exactly 6 faces.`);
-    process.exit(1);
-  }
-
-  if (!faces.every(Number.isInteger)) {
-    console.log(`Error: Dice ${i + 1} contains non-integer values.`);
-    process.exit(1);
-  }
+let diceList;
+try {
+  diceList = args.map((arg, idx) => {
+    const faces = arg.split(",").map(Number);
+    if (!faces.every(Number.isInteger))
+      throw new Error(`Dice ${idx + 1} has non-integer values.`);
+    if (faces.length < 2)
+      throw new Error(`Dice ${idx + 1} must have at least 2 faces.`);
+    return new Dice(faces);
+  });
+} catch (err) {
+  console.log("Error:", err.message);
+  process.exit(1);
 }
-
-// Construct DiceSet
-const diceList = args.map((arg) => new Dice(arg.split(",").map(Number)));
 const diceSet = new DiceSet(diceList);
 
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout,
 });
+const ask = (q) => new Promise((res) => rl.question(q, res));
 
-function prompt(query) {
-  return new Promise((resolve) => rl.question(query, resolve));
+// Computing probabilities for help table
+function calculateWinProbabilities(diceSet) {
+  const n = diceSet.getDiceCount();
+  const table = Array.from({ length: n }, () => Array(n).fill(0));
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      let wins = 0,
+        total = 0;
+      const a = diceSet.getDie(i).getAllFaces();
+      const b = diceSet.getDie(j).getAllFaces();
+      for (const x of a)
+        for (const y of b) {
+          if (x > y) wins++;
+          total++;
+        }
+      table[i][j] = (wins / total).toFixed(4);
+    }
+  }
+  return table;
 }
 
-function getHmac(secret, message) {
-  return crypto.createHmac("sha256", secret).update(message).digest("hex");
+function displayHelpTable(diceSet) {
+  console.log("\nProbability of user winning against each die:");
+  const headers = ["User dice v\\s Computer"].concat(
+    diceSet.getAllDice().map((d) => d.getAllFaces().join(","))
+  );
+  const table = new Table({ head: headers });
+  const probs = calculateWinProbabilities(diceSet);
+  diceSet.getAllDice().forEach((die, i) => {
+    const row = [die.getAllFaces().join(",")];
+    for (let j = 0; j < diceSet.getDiceCount(); j++) {
+      row.push(probs[i][j]);
+    }
+    table.push(row);
+  });
+  console.log(table.toString());
+}
+
+async function fairRoll(range) {
+  const fair = new FairRandom(range);
+  console.log(
+    `I selected a random value in 0..${
+      range - 1
+    } (HMAC=${fair.getCommitment()})`
+  );
+  let userVal;
+  while (true) {
+    userVal = await ask(`Enter your number (0..${range - 1}): `);
+    userVal = parseInt(userVal);
+    if (!isNaN(userVal) && userVal >= 0 && userVal < range) break;
+    console.log("Invalid input.");
+  }
+  const reveal = fair.reveal(userVal);
+  console.log(`Computer value: ${reveal.computerValue}`);
+  console.log(`Key: ${reveal.secret}`);
+  console.log(`Final result: (computer + user) mod ${range} = ${reveal.final}`);
+  return reveal.final;
 }
 
 async function main() {
-  // HMAC Implementation 
-  const compChoice = Math.floor(Math.random() * 2).toString();
-  const key = crypto.randomBytes(32).toString("hex");
-  const hmac = getHmac(key, compChoice);
+  console.log("Welcome to the Non-Transitive Dice Fair Play Simulator!");
+  console.log("Type ? at any prompt for help.");
 
-  console.log("Let's determine who makes the first move.");
-  console.log(`I selected a random value in the range 0..1 (HMAC=${hmac}).`);
-  console.log("Try to guess my selection.");
-  console.log("0 - 0\n1 - 1\nX - exit\n? - help");
+  // Determining who picks first using fair protocol
+  console.log("\nLet's decide who picks a die first!");
+  const firstMove = await fairRoll(2);
+  const userGoesFirst = firstMove === 1;
+  console.log(
+    userGoesFirst ? "You will choose first!" : "Computer will choose first!"
+  );
 
-  let userGuess = await prompt("Your selection: ");
+  // If user request table then displaying table 
+  let choice = await ask(
+    "Type 'help' to see probability table or press Enter to continue: "
+  );
+  if (choice.toLowerCase() === "help") displayHelpTable(diceSet);
 
-  if (userGuess.toLowerCase() === "x") {
-    console.log("Exiting game.");
-    rl.close();
-    return;
-  }
-
-  if (userGuess === "?") {
-    console.log("\nHELP:");
-    console.log("Try to guess my secret number (0 or 1).");
-    console.log("If you guess correctly, you will go first.");
-    console.log("The computer has committed to a value using an HMAC.");
-    console.log("After your guess, it will reveal the original value and key.");
-    console.log("Then you’ll choose a die and play a round against the computer.\n");
-    userGuess = await prompt("Your selection: ");
-  }
-
-  console.log(`My selection: ${compChoice} (KEY=${key})`);
-  const userGoesFirst = userGuess === compChoice;
-  console.log(userGoesFirst ? "You go first!" : "I go first!");
-
-  // Die selection
+  // Selection of Dice
   console.log("\nAvailable dice:");
-  diceSet.getAllDice().forEach((dice, index) => {
-    console.log(`${index + 1}: [${dice.getAllFaces().join(", ")}]`);
-  });
-
-  let userIndex = await prompt("Select your die (enter the number): ");
-  userIndex = parseInt(userIndex) - 1;
-
-  if (
-    isNaN(userIndex) ||
-    userIndex < 0 ||
-    userIndex >= diceSet.getDiceCount()
-  ) {
-    console.log("Invalid selection. Exiting.");
-    rl.close();
-    return;
-  }
-
-  const userDice = diceSet.getDie(userIndex);
-
-  // Computer selects random die 
-  let compIndex;
-  do {
-    compIndex = Math.floor(Math.random() * diceSet.getDiceCount());
-  } while (compIndex === userIndex && diceSet.getDiceCount() > 1);
-
-  const compDice = diceSet.getDie(compIndex);
-
-  // Rolling Logic
-  const rollFace = (dice) => {
-    const index = Math.floor(Math.random() * dice.getSidesCount());
-    return dice.getFace(index);
-  };
-
-  const userRoll = rollFace(userDice);
-  const compRoll = rollFace(compDice);
-
-  console.log(`\nYou rolled: ${userRoll}`);
-  console.log(`Computer rolled: ${compRoll}`);
-
-  if (userRoll > compRoll) {
-    console.log("You win!");
-  } else if (compRoll > userRoll) {
-    console.log("Computer wins!");
+  diceSet
+    .getAllDice()
+    .forEach((d, i) =>
+      console.log(`${i + 1}: [${d.getAllFaces().join(", ")}]`)
+    );
+  let userIndex;
+  if (userGoesFirst) {
+    userIndex = parseInt(await ask("Select your die (1..n): ")) - 1;
   } else {
-    console.log("It's a draw!");
+    userIndex = Math.floor(Math.random() * diceSet.getDiceCount());
+    console.log(
+      `Computer chose die ${userIndex + 1}: [${diceSet
+        .getDie(userIndex)
+        .getAllFaces()
+        .join(", ")}]`
+    );
   }
+  if (userIndex < 0 || userIndex >= diceSet.getDiceCount()) {
+    console.log("Invalid selection.");
+    process.exit(1);
+  }
+  const compIndex = userGoesFirst
+    ? (() => {
+        let idx;
+        do {
+          idx = Math.floor(Math.random() * diceSet.getDiceCount());
+        } while (idx === userIndex);
+        return idx;
+      })()
+    : parseInt(await ask("Select your die (1..n): ")) - 1;
 
+  console.log(
+    `Computer chose die ${compIndex + 1}: [${diceSet
+      .getDie(compIndex)
+      .getAllFaces()
+      .join(", ")}]`
+  );
+
+  // Fair roll for each
+  console.log("\nNow rolling your die:");
+  const userFaceIndex = await fairRoll(
+    diceSet.getDie(userIndex).getSidesCount()
+  );
+  const userRoll = diceSet.getDie(userIndex).getFace(userFaceIndex);
+  console.log(`Your roll: ${userRoll}`);
+
+  console.log("\nNow rolling computer's die:");
+  const compFaceIndex = await fairRoll(
+    diceSet.getDie(compIndex).getSidesCount()
+  );
+  const compRoll = diceSet.getDie(compIndex).getFace(compFaceIndex);
+  console.log(`Computer roll: ${compRoll}`);
+
+  // Decide who is the winner
+  console.log(
+    userRoll > compRoll
+      ? "You win!"
+      : compRoll > userRoll
+      ? "Computer wins!"
+      : "It's a draw!"
+  );
   rl.close();
 }
 
 main();
-
-
