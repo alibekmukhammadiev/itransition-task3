@@ -3,8 +3,8 @@ const Dice = require("./Dice");
 const DiceSet = require("./DiceSet");
 const FairRandom = require("./FairRandom");
 
-// for generating table
-const Table = require("cli-table3"); 
+// For generating table
+const Table = require("cli-table3");
 
 const args = process.argv.slice(2);
 
@@ -25,6 +25,12 @@ try {
       throw new Error(`Dice ${idx + 1} must have at least 2 faces.`);
     return new Dice(faces);
   });
+
+  // Checking for all dice have same number of sides or not
+  const sideCount = diceList[0].getSidesCount();
+  if (!diceList.every((d) => d.getSidesCount() === sideCount)) {
+    throw new Error("All dice must have the same number of sides.");
+  }
 } catch (err) {
   console.log("Error:", err.message);
   process.exit(1);
@@ -60,7 +66,7 @@ function calculateWinProbabilities(diceSet) {
 
 function displayHelpTable(diceSet) {
   console.log("\nProbability of user winning against each die:");
-  const headers = ["User dice v\\s Computer"].concat(
+  const headers = ["User dice vs. Computer"].concat(
     diceSet.getAllDice().map((d) => d.getAllFaces().join(","))
   );
   const table = new Table({ head: headers });
@@ -108,7 +114,7 @@ async function main() {
     userGoesFirst ? "You will choose first!" : "Computer will choose first!"
   );
 
-  // If user request table then displaying table 
+  // If user request table then displaying table
   let choice = await ask(
     "Type 'help' to see probability table or press Enter to continue: "
   );
@@ -169,7 +175,7 @@ async function main() {
   const compRoll = diceSet.getDie(compIndex).getFace(compFaceIndex);
   console.log(`Computer roll: ${compRoll}`);
 
-  // Decide who is the winner
+  // Deciding who is the winner
   console.log(
     userRoll > compRoll
       ? "You win!"
