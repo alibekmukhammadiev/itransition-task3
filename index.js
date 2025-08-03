@@ -80,9 +80,9 @@ function displayHelpTable(diceSet) {
 async function fairRoll(range) {
   const fair = new FairRandom(range);
   console.log(
-    `I selected a random value in 0..${
+    `\nHMAC = ${fair.getCommitment()} (range: 0..${
       range - 1
-    } (HMAC=${fair.getCommitment()})`
+    })`
   );
   let userVal;
   while (true) {
@@ -92,9 +92,8 @@ async function fairRoll(range) {
     console.log("Invalid input.");
   }
   const reveal = fair.reveal(userVal);
-  console.log(`Computer value: ${reveal.computerValue}`);
-  console.log(`Key: ${reveal.secret}`);
-  console.log(`Final result: (computer + user) mod ${range} = ${reveal.final}`);
+  console.log(`Secret key: ${reveal.secret}`);
+  console.log(`Result index: (computer + user) mod ${range} = ${reveal.final}`);
   return reveal.final;
 }
 
@@ -161,26 +160,26 @@ async function main() {
       .join(", ")}]`
   );
 
-  console.log("\nNow rolling your die:");
+  console.log("\nRolling your die...");
   const userFaceIndex = await fairRoll(
     diceSet.getDie(userIndex).getSidesCount()
   );
   const userRoll = diceSet.getDie(userIndex).getFace(userFaceIndex);
-  console.log(`Your roll: ${userRoll}`);
+  console.log(`You rolled: ${userRoll}`);
 
-  console.log("\nNow rolling computer's die:");
+  console.log("\nRolling computer's die...");
   const compFaceIndex = await fairRoll(
     diceSet.getDie(compIndex).getSidesCount()
   );
   const compRoll = diceSet.getDie(compIndex).getFace(compFaceIndex);
-  console.log(`Computer roll: ${compRoll}`);
+  console.log(`Computer rolled: ${compRoll}`);
 
   console.log(
     userRoll > compRoll
-      ? "You win!"
+      ? "\nYou win!"
       : compRoll > userRoll
-      ? "Computer wins!"
-      : "It's a draw!"
+      ? "\nComputer wins!"
+      : "\nIt's a draw!"
   );
 
   rl.close();

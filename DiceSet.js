@@ -16,4 +16,4 @@ class DiceSet {
   }
 }
 
-module.exports = DiceSet;
+module.exports = DiceSet; 
