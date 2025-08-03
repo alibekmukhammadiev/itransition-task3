@@ -2,13 +2,10 @@ const readline = require("readline");
 const Dice = require("./Dice");
 const DiceSet = require("./DiceSet");
 const FairRandom = require("./FairRandom");
-
-// For generating table
 const Table = require("cli-table3");
 
 const args = process.argv.slice(2);
 
-// Validating CLI args
 if (args.length < 3) {
   console.log("Error: You must provide at least 3 dice.");
   console.log("Usage: node index.js 2,2,4,4,9,9 1,1,6,6,8,8 3,3,5,5,7,7");
@@ -26,7 +23,6 @@ try {
     return new Dice(faces);
   });
 
-  // Checking for all dice have same number of sides or not
   const sideCount = diceList[0].getSidesCount();
   if (!diceList.every((d) => d.getSidesCount() === sideCount)) {
     throw new Error("All dice must have the same number of sides.");
@@ -35,6 +31,7 @@ try {
   console.log("Error:", err.message);
   process.exit(1);
 }
+
 const diceSet = new DiceSet(diceList);
 
 const rl = readline.createInterface({
@@ -43,7 +40,6 @@ const rl = readline.createInterface({
 });
 const ask = (q) => new Promise((res) => rl.question(q, res));
 
-// Computing probabilities for help table
 function calculateWinProbabilities(diceSet) {
   const n = diceSet.getDiceCount();
   const table = Array.from({ length: n }, () => Array(n).fill(0));
@@ -65,8 +61,8 @@ function calculateWinProbabilities(diceSet) {
 }
 
 function displayHelpTable(diceSet) {
-  console.log("\nProbability of user winning against each die:");
-  const headers = ["User dice vs. Computer"].concat(
+  console.log("\nProbability of the win for the user:");
+  const headers = ["User dice vs"].concat(
     diceSet.getAllDice().map((d) => d.getAllFaces().join(","))
   );
   const table = new Table({ head: headers });
@@ -74,7 +70,7 @@ function displayHelpTable(diceSet) {
   diceSet.getAllDice().forEach((die, i) => {
     const row = [die.getAllFaces().join(",")];
     for (let j = 0; j < diceSet.getDiceCount(); j++) {
-      row.push(probs[i][j]);
+      row.push(i === j ? "-" : probs[i][j]);
     }
     table.push(row);
   });
@@ -104,9 +100,8 @@ async function fairRoll(range) {
 
 async function main() {
   console.log("Welcome to the Non-Transitive Dice Fair Play Simulator!");
-  console.log("Type ? at any prompt for help.");
+  console.log("Type '?' at any prompt for help.");
 
-  // Determining who picks first using fair protocol
   console.log("\nLet's decide who picks a die first!");
   const firstMove = await fairRoll(2);
   const userGoesFirst = firstMove === 1;
@@ -114,19 +109,18 @@ async function main() {
     userGoesFirst ? "You will choose first!" : "Computer will choose first!"
   );
 
-  // If user request table then displaying table
-  let choice = await ask(
-    "Type 'help' to see probability table or press Enter to continue: "
+  const choice = await ask(
+    "Type 'help' to see the probability table or press Enter to continue: "
   );
   if (choice.toLowerCase() === "help") displayHelpTable(diceSet);
 
-  // Selection of Dice
   console.log("\nAvailable dice:");
   diceSet
     .getAllDice()
     .forEach((d, i) =>
       console.log(`${i + 1}: [${d.getAllFaces().join(", ")}]`)
     );
+
   let userIndex;
   if (userGoesFirst) {
     userIndex = parseInt(await ask("Select your die (1..n): ")) - 1;
@@ -139,10 +133,12 @@ async function main() {
         .join(", ")}]`
     );
   }
+
   if (userIndex < 0 || userIndex >= diceSet.getDiceCount()) {
     console.log("Invalid selection.");
     process.exit(1);
   }
+
   const compIndex = userGoesFirst
     ? (() => {
         let idx;
@@ -153,6 +149,11 @@ async function main() {
       })()
     : parseInt(await ask("Select your die (1..n): ")) - 1;
 
+  if (compIndex < 0 || compIndex >= diceSet.getDiceCount()) {
+    console.log("Invalid selection.");
+    process.exit(1);
+  }
+
   console.log(
     `Computer chose die ${compIndex + 1}: [${diceSet
       .getDie(compIndex)
@@ -160,7 +161,6 @@ async function main() {
       .join(", ")}]`
   );
 
-  // Fair roll for each
   console.log("\nNow rolling your die:");
   const userFaceIndex = await fairRoll(
     diceSet.getDie(userIndex).getSidesCount()
@@ -175,7 +175,6 @@ async function main() {
   const compRoll = diceSet.getDie(compIndex).getFace(compFaceIndex);
   console.log(`Computer roll: ${compRoll}`);
 
-  // Deciding who is the winner
   console.log(
     userRoll > compRoll
       ? "You win!"
@@ -183,6 +182,7 @@ async function main() {
       ? "Computer wins!"
       : "It's a draw!"
   );
+
   rl.close();
 }
 
